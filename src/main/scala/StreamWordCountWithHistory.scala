@@ -101,23 +101,20 @@ object StreamWordCountWithHistory {
 
     lines.foreachRDD(rdd => {
       rdd.count() match {
-        case 0 if isTesting => {
+        case 0 if isTesting =>
           println("Receive: 0.")
-          val
-          = new PrintWriter(new Socket(genAddr, port+1).getOutputStream, true)
+          val stopAsker = new PrintWriter(new Socket(genAddr, port+1).getOutputStream, true)
           stopAsker.print(1)
           stopIndicator.isStop = true
-        }
-        case x if x != 0 => {
+        case x if x != 0 =>
           println("Receive: " + x)
           isTesting = true
-        } //stateDstream.print()
         case x => println("Receive: " + x)
       }
     })
 
     saveOrPrint match {
-      case 0 => stateDstream.print
+      case 0 => stateDstream.print()
       case 1 => stateDstream.saveAsTextFiles(dest)
     }
     ssc.start()
