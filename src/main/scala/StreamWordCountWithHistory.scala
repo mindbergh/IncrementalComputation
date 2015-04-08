@@ -90,9 +90,8 @@ object StreamWordCountWithHistory {
     val pageDstream = lines
       .map(_.split(Separator))
       .flatMap( x => x.length match {
-      case 2 => x(1).split(" ").map((_, 1))
-      case 3 => Seq(x(1).split(" ").map((_, 1)), x(2).split(" ").map((_, -1))).flatten
-
+      case 2 => x(1).split(" ").map((_, 1))   // without history, this is a insert
+      case 3 => Seq(x(1).split(" ").map((_, 1)), x(2).split(" ").map((_, -1))).flatten // with history, this is a update
     })
 
     val stateDstream = pageDstream.updateStateByKey[Count](newUpdateFunc,
