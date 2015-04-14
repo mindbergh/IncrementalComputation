@@ -3,12 +3,38 @@ import java.net.Socket
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.streaming._
 import org.apache.spark.streaming.scheduler.{StreamingListenerBatchCompleted, StreamingListener}
 import org.apache.spark.{HashPartitioner, SparkConf}
-import org.apache.spark.streaming._
 import org.rogach.scallop.ScallopConf
 
-object StreamWordCountWithHistory {
+class TwoPhaseListener(val ssc: StreamingContext, val stopIndicator: StopIndicator, val genAddr: String, val port: Int) extends StreamingListener {
+  var reporter: Option[PrintWriter] = None
+  var counter = 0
+  override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted) = {
+    if (stopIndicator.emptyInput >= 2) {
+      println("Gracefully stopping Spark Streaming Application")
+      println("Summary: ")
+      stopIndicator.receives.foreach(x => println("Line received: " + x))
+      ssc.stop(true)
+      println("Application stopped")
+    } else {
+      println(s"$counter batch finished")
+      counter+=1
+      reporter match {
+        case None =>
+          reporter = Some(new PrintWriter(new Socket(genAddr, port+1).getOutputStream, true))
+          reporter.get.print(1)
+          reporter.get.flush()
+        case Some(r) =>
+          r.print(1)
+          r.flush()
+      }
+    }
+  }
+}
+
+object TwoPhaseStreamWordCountWithHistory {
   type Count = Int
 
   def makeInitial(ssc:StreamingContext, src: String, partition: Int) : RDD[(String, Count)] = {
@@ -79,7 +105,7 @@ object StreamWordCountWithHistory {
     // Create the context with given duration
     val ssc = new StreamingContext(sparkConf, duration)
     var stop = false
-    ssc.addStreamingListener(new MyListener(ssc, stopIndicator))
+    ssc.addStreamingListener(new TwoPhaseListener(ssc, stopIndicator, genAddr, port))
     ssc.checkpoint("./CheckPoints/")
 
 
@@ -109,14 +135,14 @@ object StreamWordCountWithHistory {
     lines.foreachRDD(rdd => {
       rdd.count() match {
         case 0 if isTesting =>
-          println("Receive: 0.")
-          val stopAsker = new PrintWriter(new Socket(genAddr, port+1).getOutputStream, true)
-          stopAsker.print(1)
-          stopIndicator.isStop = true
-        case x if x != 0 =>
-          println("Receive: " + x)
+          stopIndicator.receives ++= List(0.toLong)
+          stopIndicator.emptyInput += 1
+        case x : Long if x != 0 =>
           isTesting = true
-        case x => println("Receive: " + x)
+          stopIndicator.receives ++= List(x)
+          stopIndicator.emptyInput = 0
+        case x : Long =>
+          stopIndicator.receives ++= List(x)
       }
     })
 
@@ -126,5 +152,6 @@ object StreamWordCountWithHistory {
     }
     ssc.start()
     ssc.awaitTermination()
+    println("Terminated.....................")
   }
 }

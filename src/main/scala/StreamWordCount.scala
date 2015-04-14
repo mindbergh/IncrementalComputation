@@ -19,6 +19,8 @@ class MyListener(val ssc: StreamingContext, val stopIndicator: StopIndicator) ex
 }
 class StopIndicator extends Serializable {
   var isStop: Boolean = false
+  var emptyInput: Int = 0
+  var receives: List[Long] = Nil
 }
 
 object StreamWordCount {

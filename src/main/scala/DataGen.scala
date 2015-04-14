@@ -23,7 +23,7 @@ class TestStoper(port: Int) extends Runnable {
 }
 
 
-class CorpusGen(port: Int, source: String, toSent: Int, duration: Float, toTest: Int) extends Runnable {
+class CorpusGen(port: Int, source: String, toSent: Int, duration: Float, toTest: Int, emptyRun: Option[Int]) extends Runnable {
   def run() {
     try {
       val listener = new ServerSocket(port)
@@ -32,7 +32,7 @@ class CorpusGen(port: Int, source: String, toSent: Int, duration: Float, toTest:
       println("CorpusGen: Listening on port " + port)
 
       while (true) {
-        new ClitHandler(listener.accept(), numClients, source, toSent, duration, toTest).start()
+        new ClitHandler(listener.accept(), numClients, source, toSent, duration, toTest, emptyRun).start()
         println("Starting Test Stopper...")
         new Thread(new TestStoper(port+1)).start()
         numClients += 1
@@ -48,7 +48,7 @@ class CorpusGen(port: Int, source: String, toSent: Int, duration: Float, toTest:
   }
 }
 
-class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, duration: Float, toTest: Int) extends Actor {
+class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, duration: Float, toTest: Int, emptyRun: Option[Int]) extends Actor {
   private def sendData(iter: Iterator[String], out: PrintWriter, toSent: Int): Unit = {
     toSent match {
       case 0 => return
@@ -59,10 +59,18 @@ class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, du
       case _ => return
     }
   }
-  private def runTest(iter: Iterator[String], out: PrintWriter, toTest: Int): Unit = {
-    toTest match {
-      case 0 => return
-      case _ => {
+  private def runTest(iter: Iterator[String], out: PrintWriter, toTest: Int, emptyRun: Option[Int]): Unit = {
+    (emptyRun, toTest) match {
+      case (None, 0) => return
+      case (Some(1), _) =>
+        println("Empty run.")
+        Thread.sleep(duration.toLong)
+        runTest(iter, out, toTest, None)
+      case (Some(x), _) =>
+        println("Empty run.")
+        Thread.sleep(duration.toLong)
+        runTest(iter, out, toTest, Some(x - 1))
+      case (None, _) => {
         val start = System.nanoTime()
         val startEpoch = System.currentTimeMillis
         sendData(iter, out, toSent)
@@ -76,7 +84,7 @@ class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, du
             println("Start time: %d, Time took: %f ms, About to sleep 0 ms, toTest: %d".format(startEpoch, elapsed, toTest))
           }
         }
-        runTest(iter, out, toTest - 1)
+        runTest(iter, out, toTest - 1, None)
       }
     }
   }
@@ -94,7 +102,7 @@ class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, du
 
       val iter = Source.fromFile(srcPath).getLines()
 
-      runTest(iter, out, toTest)
+      runTest(iter, out, toTest, emptyRun)
 
       println("DataGen: TestDate all sent.")
       in.read()
@@ -104,7 +112,7 @@ class ClitHandler(socket: Socket, clientId: Int, source: String, toSent: Int, du
         System.err.println(e)
 
       case e: IOException =>
-        System.err.println(e.printStackTrace())
+        e.printStackTrace()
 
       case e: Throwable =>
         System.err.println("Unknown error " + e)
@@ -124,8 +132,10 @@ object DataGenMain {
         descr = "The number of lines to sent per duration.")
       val duration = opt[Int]("duration", 'd', default = Some(1000),
         descr = "The time duration to send data. (ms).")
-      val toTest = opt[Int]("toTest", 'r', default = Some(5),
+      val toTest = opt[Int]("toTest", 'r', default = Some(0),
         descr = "The number of durations to run the test.")
+      val emptyRun = opt[Int]("emtpyRun", 'e', default = Some(0),
+        descr = "The number of runs of empty data before sending the first batch. Empty batch allows Spark Stream to do initialization.")
     }
 
     val port = Conf.port()
@@ -133,9 +143,13 @@ object DataGenMain {
     val toSent = Conf.toSent()
     val duration = Conf.duration().toFloat
     val toTest = Conf.toTest()
+    val emptyRun = Conf.emptyRun() match {
+      case 0 => None
+      case x => Some(x)
+    }
 
 
-    new Thread(new CorpusGen(port, source, toSent, duration, toTest)).start()
+    new Thread(new CorpusGen(port, source, toSent, duration, toTest, emptyRun)).start()
     println("Server started")
   }
 }
