@@ -10,8 +10,8 @@ class TestReporter(port: Int) extends Runnable {
       var counter = 0
       println("TestReporter: Listening on " + port)
       var start = System.nanoTime()
-      val sock = listener.accept()
       println("Test begin..")
+      val sock = listener.accept()
       val in = sock.getInputStream
 
       while (in.read() == 49) {
@@ -58,9 +58,9 @@ object TwoPhaseDataGen {
       version("Data Gen by Ming")
       val port = opt[Int]("port", 'p', default = Some(9998),
         descr = "The port to listen at.")
-      val source = opt[String]("source", 's', default = Some("corpus/increWithHis"),
+      val source = opt[String]("source", 's', default = Some("corpus/100kUpdates"),
         descr = "The source file to read from.")
-      val toSent = opt[Int]("toSent", 't', default = Some(300),
+      val toSent = opt[Int]("toSent", 't', default = Some(5),
         descr = "The number of lines to sent per duration.")
       val duration = opt[Int]("duration", 'd', default = Some(1000),
         descr = "The time duration to send data. (ms).")

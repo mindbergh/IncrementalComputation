@@ -128,7 +128,7 @@ object DataGenMain {
         descr = "The port to listen at.")
       val source = opt[String]("source", 's', default = Some("corpus/increWithHis"),
         descr = "The source file to read from.")
-      val toSent = opt[Int]("toSent", 't', default = Some(100),
+      val toSent = opt[Int]("toSent", 't', default = Some(5),
         descr = "The number of lines to sent per duration.")
       val duration = opt[Int]("duration", 'd', default = Some(1000),
         descr = "The time duration to send data. (ms).")
